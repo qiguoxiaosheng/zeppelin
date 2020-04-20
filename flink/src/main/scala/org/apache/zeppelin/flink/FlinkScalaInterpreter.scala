@@ -79,6 +79,7 @@ class FlinkScalaInterpreter(val properties: Properties) {
 
   private var mode: ExecutionMode.Value = _
 
+  private var tblEnvFactory: TableEnvFactory = _
   private var benv: ExecutionEnvironment = _
   private var senv: StreamExecutionEnvironment = _
 
@@ -229,7 +230,7 @@ class FlinkScalaInterpreter(val properties: Properties) {
         config.externalJars.getOrElse(Array.empty[String]).mkString(":"))
       val classLoader = Thread.currentThread().getContextClassLoader
       try {
-        // use FlinkClassLoader to initialize FlinkILoop, otherwise TableFactoryService could find
+        // use FlinkClassLoader to initialize FlinkILoop, otherwise TableFactoryService could not find
         // the TableFactory properly
         Thread.currentThread().setContextClassLoader(getFlinkClassLoader)
         val repl = new FlinkILoop(configuration, config.externalJars, None, replOut)
@@ -299,7 +300,7 @@ class FlinkScalaInterpreter(val properties: Properties) {
       val flinkFunctionCatalog = new FunctionCatalog(tblConfig, catalogManager, moduleManager);
       val blinkFunctionCatalog = new FunctionCatalog(tblConfig, catalogManager, moduleManager);
 
-      val tblEnvFactory = new TableEnvFactory(this.benv, this.senv, tblConfig,
+      this.tblEnvFactory = new TableEnvFactory(this.benv, this.senv, tblConfig,
         catalogManager, moduleManager, flinkFunctionCatalog, blinkFunctionCatalog)
 
       // blink planner
@@ -359,7 +360,7 @@ class FlinkScalaInterpreter(val properties: Properties) {
     flinkILoop.interpret("import org.apache.flink.table.functions.AggregateFunction")
     flinkILoop.interpret("import org.apache.flink.table.functions.TableFunction")
 
-    this.z = new FlinkZeppelinContext(this.btenv, this.btenv_2, new InterpreterHookRegistry(),
+    this.z = new FlinkZeppelinContext(this, new InterpreterHookRegistry(),
       Integer.parseInt(properties.getProperty("zeppelin.flink.maxResult", "1000")))
     val modifiers = new java.util.ArrayList[String]()
     modifiers.add("@transient")
@@ -547,7 +548,23 @@ class FlinkScalaInterpreter(val properties: Properties) {
     field.get(obj)
   }
 
+  /**
+   * This is just a workaround to make table api work in multiple threads.
+   */
+  def createPlannerAgain(): Unit = {
+    val originalClassLoader = Thread.currentThread().getContextClassLoader
+    try {
+      Thread.currentThread().setContextClassLoader(getFlinkClassLoader)
+      val stEnvSetting =
+        EnvironmentSettings.newInstance().inStreamingMode().useBlinkPlanner().build()
+      this.tblEnvFactory.createPlanner(stEnvSetting)
+    } finally {
+      Thread.currentThread().setContextClassLoader(originalClassLoader)
+    }
+  }
+
   def interpret(code: String, context: InterpreterContext): InterpreterResult = {
+    createPlannerAgain()
     val originalStdOut = System.out
     val originalStdErr = System.err;
     if (context != null) {
@@ -621,7 +638,6 @@ class FlinkScalaInterpreter(val properties: Properties) {
             LOGGER.info("Don't close the Remote FlinkCluster")
         }
       }
-
     } else {
       LOGGER.info("Keep cluster alive when closing interpreter")
     }
@@ -629,6 +645,9 @@ class FlinkScalaInterpreter(val properties: Properties) {
     if (flinkILoop != null) {
       flinkILoop.closeInterpreter()
       flinkILoop = null
+    }
+    if (jobManager != null) {
+      jobManager.shutdown()
     }
   }
 
@@ -649,9 +668,19 @@ class FlinkScalaInterpreter(val properties: Properties) {
 
   def getStreamExecutionEnvironment(): StreamExecutionEnvironment = this.senv
 
-  def getBatchTableEnvironment(): TableEnvironment = this.btenv
+  def getBatchTableEnvironment(planner: String = "blink"): TableEnvironment = {
+    if (planner == "blink")
+      this.btenv
+    else
+      this.btenv_2
+  }
 
-  def getStreamTableEnvironment(): StreamTableEnvironment = this.stenv
+  def getStreamTableEnvironment(planner: String = "blink"): StreamTableEnvironment = {
+    if (planner == "blink")
+      this.stenv
+    else
+      this.stenv_2
+  }
 
   def getJavaBatchTableEnvironment(planner: String): TableEnvironment = {
     if (planner == "blink") {

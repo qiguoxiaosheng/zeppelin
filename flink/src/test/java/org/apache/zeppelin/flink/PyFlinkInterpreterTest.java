@@ -19,7 +19,6 @@ package org.apache.zeppelin.flink;
 
 
 import com.google.common.io.Files;
-import org.apache.commons.io.IOUtils;
 import org.apache.zeppelin.display.AngularObjectRegistry;
 import org.apache.zeppelin.interpreter.Interpreter;
 import org.apache.zeppelin.interpreter.InterpreterContext;
@@ -38,8 +37,6 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.Properties;
 
-import static junit.framework.TestCase.assertTrue;
-import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 
 
@@ -48,7 +45,7 @@ public class PyFlinkInterpreterTest extends PythonInterpreterTest {
   private RemoteInterpreterEventClient mockRemoteEventClient =
           mock(RemoteInterpreterEventClient.class);
 
-  private Interpreter flinkInterpreter;
+  private Interpreter flinkScalaInterpreter;
   private Interpreter streamSqlInterpreter;
   private Interpreter batchSqlInterpreter;
 
@@ -77,9 +74,9 @@ public class PyFlinkInterpreterTest extends PythonInterpreterTest {
         .setIntpEventClient(mockRemoteEventClient)
         .build();
     InterpreterContext.set(context);
-    flinkInterpreter = new LazyOpenInterpreter(new FlinkInterpreter(properties));
-    intpGroup.get("session_1").add(flinkInterpreter);
-    flinkInterpreter.setInterpreterGroup(intpGroup);
+    flinkScalaInterpreter = new LazyOpenInterpreter(new FlinkInterpreter(properties));
+    intpGroup.get("session_1").add(flinkScalaInterpreter);
+    flinkScalaInterpreter.setInterpreterGroup(intpGroup);
 
     LazyOpenInterpreter iPyFlinkInterpreter =
         new LazyOpenInterpreter(new IPyFlinkInterpreter(properties));
@@ -108,9 +105,28 @@ public class PyFlinkInterpreterTest extends PythonInterpreterTest {
   }
 
   @Test
-  public void testPyFlink() throws InterpreterException {
-    IPyFlinkInterpreterTest.testBatchPyFlink(interpreter);
-    IPyFlinkInterpreterTest.testStreamPyFlink(interpreter);
+  public void testBatchPyFlink() throws InterpreterException, IOException {
+    IPyFlinkInterpreterTest.testBatchPyFlink(interpreter, flinkScalaInterpreter);
+  }
+
+  @Test
+  public void testStreamIPyFlink() throws InterpreterException, IOException {
+    IPyFlinkInterpreterTest.testStreamPyFlink(interpreter, flinkScalaInterpreter);
+  }
+
+  @Test
+  public void testSingleStreamTableApi() throws InterpreterException, IOException {
+    IPyFlinkInterpreterTest.testSingleStreamTableApi(interpreter, flinkScalaInterpreter);
+  }
+
+  @Test
+  public void testUpdateStreamTableApi() throws InterpreterException, IOException {
+    IPyFlinkInterpreterTest.testUpdateStreamTableApi(interpreter, flinkScalaInterpreter);
+  }
+
+  @Test
+  public void testAppendStreamTableApi() throws InterpreterException, IOException {
+    IPyFlinkInterpreterTest.testAppendStreamTableApi(interpreter, flinkScalaInterpreter);
   }
 
   protected InterpreterContext getInterpreterContext() {

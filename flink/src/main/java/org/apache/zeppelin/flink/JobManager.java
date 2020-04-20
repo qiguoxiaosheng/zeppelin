@@ -140,6 +140,12 @@ public class JobManager {
     jobProgressPoller.interrupt();
   }
 
+  public void shutdown() {
+    for (FlinkJobProgressPoller jobProgressPoller : jobProgressPollerMap.values()) {
+      jobProgressPoller.cancel();
+    }
+  }
+
   class FlinkJobProgressPoller extends Thread {
 
     private String flinkWebUI;
@@ -159,8 +165,9 @@ public class JobManager {
     @Override
     public void run() {
       while (!Thread.currentThread().isInterrupted() && running.get()) {
+        JsonNode rootNode = null;
         try {
-          JsonNode rootNode = Unirest.get(flinkWebUI + "/jobs/" + jobId.toString())
+          rootNode = Unirest.get(flinkWebUI + "/jobs/" + jobId.toString())
                   .asJson().getBody();
           JSONArray vertices = rootNode.getObject().getJSONArray("vertices");
           int totalTasks = 0;
@@ -195,7 +202,7 @@ public class JobManager {
             context.out.flush();
           }
         } catch (Exception e) {
-          LOGGER.error("Fail to poll flink job progress via rest api", e);
+          LOGGER.error("Fail to poll flink job progress via rest api, rest api: " + rootNode, e);
         }
       }
     }

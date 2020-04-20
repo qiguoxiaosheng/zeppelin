@@ -42,10 +42,8 @@ import org.apache.zeppelin.interpreter.InterpreterContext;
 import org.apache.zeppelin.interpreter.InterpreterException;
 import org.apache.zeppelin.interpreter.InterpreterGroup;
 import org.apache.zeppelin.interpreter.InterpreterOutput;
-import org.apache.zeppelin.interpreter.InterpreterOutputListener;
 import org.apache.zeppelin.interpreter.InterpreterResult;
 import org.apache.zeppelin.interpreter.InterpreterResultMessage;
-import org.apache.zeppelin.interpreter.InterpreterResultMessageOutput;
 import org.apache.zeppelin.interpreter.remote.RemoteInterpreterEventClient;
 import org.junit.After;
 import org.junit.Before;
@@ -62,7 +60,8 @@ import java.io.PrintWriter;
 import java.util.List;
 import java.util.Properties;
 
-import static org.apache.zeppelin.interpreter.InterpreterResult.*;
+import static org.apache.zeppelin.interpreter.InterpreterResult.Code;
+import static org.apache.zeppelin.interpreter.InterpreterResult.Type;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -332,6 +331,14 @@ public abstract class SqlInterpreterTest {
     assertEquals(Type.TEXT, resultMessages.get(0).getType());
     assertTrue(resultMessages.get(0).getData(), resultMessages.get(0).getData().contains("already exists"));
 
+    // show tables
+    context = getInterpreterContext();
+    result = sqlInterpreter.interpret("show tables", context);
+    assertEquals(Code.SUCCESS, result.code());
+    resultMessages = context.out.toInterpreterResultMessage();
+    assertEquals(Type.TABLE, resultMessages.get(0).getType());
+    assertEquals("table\nmy_view\nsource_table\n", resultMessages.get(0).getData());
+
     // drop table
     context = getInterpreterContext();
     result = sqlInterpreter.interpret("drop view my_view", context);
@@ -358,6 +365,7 @@ public abstract class SqlInterpreterTest {
 
   protected InterpreterContext getInterpreterContext() {
     return InterpreterContext.builder()
+            .setParagraphId("paragraphId")
             .setInterpreterOut(new InterpreterOutput(null))
             .setAngularObjectRegistry(new AngularObjectRegistry("flink", null))
             .setIntpEventClient(mock(RemoteInterpreterEventClient.class))
